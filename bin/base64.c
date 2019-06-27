@@ -4,41 +4,54 @@
 #include <getopt.h>
 #include "../include/libbase64.h"
 
-#define BUFSIZE 1024 * 1024
+#define BUFSIZE 100 * 1024 * 1024
 
 static char buf[BUFSIZE];
 static char out[(BUFSIZE * 5) / 3];	// Technically 4/3 of input, but take some margin
 size_t nread;
 size_t nout;
 
-static int
-enc (FILE *fp)
-{
+int readFile(FILE *fp, char* buf, size_t *nread){
 	int ret = 1;
-	struct base64_state state;
-
-	base64_stream_encode_init(&state, 0);
-
-	while ((nread = fread(buf, 1, BUFSIZE, fp)) > 0) {
-		base64_stream_encode(&state, buf, nread, out, &nout);
-		if (nout) {
-			fwrite(out, nout, 1, stdout);
+	int tempLen = 0;
+	const int tempBufLen = 1024 * 1024;
+	char tempBuf[1024 * 1024] = {'\0'};
+	while ((tempLen = fread(tempBuf, 1, tempBufLen, fp)) > 0) {
+		if(*nread >= BUFSIZE){
+			printf("too big file size\n");
+			ret = 0;
+			goto out;
 		}
+		memcpy(buf + *nread, tempBuf, tempLen);
+		*nread += tempLen;
+		memset(tempBuf, 0, tempBufLen);
 		if (feof(fp)) {
 			break;
 		}
 	}
+
 	if (ferror(fp)) {
 		fprintf(stderr, "read error\n");
 		ret = 0;
 		goto out;
 	}
-	base64_stream_encode_final(&state, out, &nout);
+out:	fclose(fp);
+	return ret;
+}
+
+static int
+enc (FILE *fp)
+{
+	int ret = 1;
+	ret = readFile(fp, buf, &nread);
+	//printf("nout = %d, nread = %d, ret = %d\n", nout, nread, ret);
+	if(ret > 0){
+		base64_encode(buf, nread, out, &nout, 0);
+	}
 
 	if (nout) {
 		fwrite(out, nout, 1, stdout);
 	}
-out:	fclose(fp);
 	fclose(stdout);
 	return ret;
 }
@@ -47,28 +60,20 @@ static int
 dec (FILE *fp)
 {
 	int ret = 1;
-	struct base64_state state;
+	ret = readFile(fp, buf, &nread);
+	if(ret > 0){
 
-	base64_stream_decode_init(&state, 0);
-
-	while ((nread = fread(buf, 1, BUFSIZE, fp)) > 0) {
-		if (!base64_stream_decode(&state, buf, nread, out, &nout)) {
+		if (!base64_decode(buf, nread, out, &nout, 0)) {
 			fprintf(stderr, "decoding error\n");
 			ret = 0;
 			goto out;
 		}
-		if (nout) {
-			fwrite(out, nout, 1, stdout);
-		}
-		if (feof(fp)) {
-			break;
-		}
 	}
-	if (ferror(fp)) {
-		fprintf(stderr, "read error\n");
-		ret = 0;
+
+	if (nout) {
+		fwrite(out, nout, 1, stdout);
 	}
-out:	fclose(fp);
+out:
 	fclose(stdout);
 	return ret;
 }
