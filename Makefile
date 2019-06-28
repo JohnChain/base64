@@ -1,4 +1,4 @@
-CFLAGS += -std=c99 -O3 -Wall -Wextra -pedantic
+CFLAGS += -std=c99 -O3 -Wall -Wextra -pedantic -no-pie
 
 # Set OBJCOPY if not defined by environment:
 OBJCOPY ?= objcopy
@@ -63,6 +63,9 @@ all: bin/base64 lib/libbase64.o
 
 bin/base64: bin/base64.o bin/base64_find.o lib/libbase64.o
 	$(CXX) $(CFLAGS) -o $@ $^
+
+lib/libbase64.a: $(OBJS)
+	ar rcs $@ $^
 
 lib/libbase64.o: $(OBJS)
 	$(LD) -r -o $@ $^

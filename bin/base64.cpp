@@ -116,14 +116,17 @@ static int
 enc (vector <struct readData*> &readList)
 {
 	int ret = 1;
-	steady_clock::time_point t1 = steady_clock::now();
+	double totalSpan = 0;
 	int size = readList.size();
 	for(int i = 0; i < size; i++)
     {
 		nout = 0;
 		memset(out, 0, (BUFSIZE * 5) / 3);
-		(*encodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
 
+		steady_clock::time_point t1 = steady_clock::now();
+		(*encodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
+		steady_clock::time_point t2 = steady_clock::now();
+		totalSpan += duration_cast<duration<double>>(t2 - t1).count();
 		if (nout) {
 			fwrite(out, nout, 1, stdout);
 			if(size > 1) GLOG_INFO("#########\n");
@@ -131,10 +134,9 @@ enc (vector <struct readData*> &readList)
 			GLOG_INFO("encode failed\n");
 		}
 	}
-	steady_clock::time_point t2 = steady_clock::now();
-	duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+
 	if(printTime){
-		GLOG_INFO("It took me %lf\n", time_span.count());
+		GLOG_INFO("It took me %lf\n", totalSpan);
 	}
 	fclose(stdout);
 	return ret;
@@ -145,22 +147,27 @@ dec (vector <struct readData*> &readList)
 {
 	int ret = 1;
 	int size = readList.size();
-	steady_clock::time_point t1 = steady_clock::now();
+	double totalSpan = 0;
 	for(int i = 0; i < size; i++)
     {
+		nout = 0;
 		memset(out, 0, (BUFSIZE * 5) / 3);
+
+		steady_clock::time_point t1 = steady_clock::now();
 		ret = (*decodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
+		steady_clock::time_point t2 = steady_clock::now();
+		totalSpan += duration_cast<duration<double>>(t2 - t1).count();
+
 		if(printTime) printf("decode OK: %s\n", readList[i]->sourceName);
     }
-	steady_clock::time_point t2 = steady_clock::now();
-	duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+
 	if (!ret || !nout)
 	{
 		fprintf(stderr, "decoding error\n");
 	}
 	if(printTime)
 	{
-		GLOG_INFO("It took me %lf\n", time_span.count());
+		GLOG_INFO("It took me %lf\n", totalSpan);
 	}
 	else
 	{
