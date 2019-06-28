@@ -27,6 +27,7 @@ void (*encodeFun) (const char *, size_t, char*, size_t*, int);
 #define GLOG_INFO printf
 
 struct readData{
+	char sourceName[256];
 	char * data;
 	int size;
 };
@@ -143,24 +144,32 @@ static int
 dec (vector <struct readData*> &readList)
 {
 	int ret = 1;
-	steady_clock::time_point t1 = steady_clock::now();
 	int size = readList.size();
+	steady_clock::time_point t1 = steady_clock::now();
 	for(int i = 0; i < size; i++)
     {
 		memset(out, 0, (BUFSIZE * 5) / 3);
 		ret = (*decodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
-		if (!ret) {
-			fprintf(stderr, "decoding error\n");
-		}
+		if(printTime) printf("decode OK: %s\n", readList[i]->sourceName);
     }
 	steady_clock::time_point t2 = steady_clock::now();
 	duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-	if(printTime){
+	if (!ret || !nout)
+	{
+		fprintf(stderr, "decoding error\n");
+	}
+	if(printTime)
+	{
 		GLOG_INFO("It took me %lf\n", time_span.count());
-	}else{
-		if (nout) {
+	}
+	else
+	{
+		if (nout)
+		{
 			fwrite(out, nout, 1, stdout);
-		}else{
+		}
+		else
+		{
 			fprintf(stderr, "nout error\n");
 		}
 	}
@@ -231,22 +240,33 @@ main (int argc, char **argv)
 		data->data = (char*)malloc(ll);
 		memcpy(data->data, buf, ll);
 		data->size = ll;
+		memset(data->sourceName, 0, 256);
+		memcpy(data->sourceName, fileList[i].c_str(), strlen(fileList[i].c_str()));
 		readList.push_back(data);
 	}
 
-	switch(baseEngin){
-		case 1:{
-			if(decode){
+	switch(baseEngin)
+	{
+		case 1:
+		{
+			if(decode)
+			{
 				decodeFun = &base64_decode;
-			}else{
+			}
+			else
+			{
 				encodeFun = &base64_encode;
 			}
 			break;
 		}
-		case 2:{
-			if(decode){
+		case 2:
+		{
+			if(decode)
+			{
 				decodeFun = &base64_decode_find;
-			}else{
+			}
+			else
+			{
 				encodeFun = &base64_encode_find;
 			}
 			break;
