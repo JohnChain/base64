@@ -8,17 +8,23 @@
 #include <vector>		//vector
 #include <string>
 #include <algorithm>	//sort
+#include "base64_find.h"
 using namespace std;
 using namespace std::chrono;
 
 #define BUFSIZE 100 * 1024 * 1024
 int decode = 0;
+int baseEngin = 1;
+int printTime = 0;
 std::string path = "";
 std::string keyword = "";
 static char buf[BUFSIZE];
 static char out[(BUFSIZE * 5) / 3];	// Technically 4/3 of input, but take some margin
 size_t nread;
 size_t nout;
+int (*decodeFun) (const char *, size_t, char*, size_t*, int);
+void (*encodeFun) (const char *, size_t, char*, size_t*, int);
+#define GLOG_INFO printf
 
 struct readData{
 	char * data;
@@ -30,22 +36,23 @@ static const struct option long_option[] = {
 	{"encode", required_argument, NULL, 'e'},
 	{"path", required_argument, NULL, 'p'},
 	{"keyword", required_argument, NULL, 'k'},
+	{"time", required_argument, NULL, 't'},
+	{"baseengin", required_argument, NULL, 'b'},
 	{"help", required_argument, NULL, 'h'},
 	{"version", required_argument, NULL, 'v'},
 	{NULL, 0, NULL, 0},
 };
 
 void showUsage(){
-	printf("[USAGE]: ./base64 -d/-e -p dir_path_to_files -k file_keyword");
+	GLOG_INFO("[USAGE]: ./base64 -d/-e -p dir_path_to_files -k file_keyword\n");
 }
 
 int getFileList(string &basePath, string &keyword, vector<string> &fileList)
 {
 	DIR *dir;
 	struct dirent *ptr;
-	printf("basePath = %s\n", basePath.c_str());
 	if ((dir=opendir(basePath.c_str())) == NULL){
-		printf("Open %s error... %s[%d]\n", basePath.c_str(), strerror(errno), errno);
+		GLOG_INFO("Open %s error... %s[%d]\n", basePath.c_str(), strerror(errno), errno);
 		return -1;
 	}
 
@@ -68,7 +75,7 @@ int getFileList(string &basePath, string &keyword, vector<string> &fileList)
 	sort(fileList.begin(), fileList.end(), less<string>());
 	int pos = fileList.size();
 	for(int i = 0; i < pos; i++){
-		printf("[%d] %s\n", i, fileList[i].c_str());
+		//GLOG_INFO("[%d] %s\n", i, fileList[i].c_str());
 	}
 
 	return 0;
@@ -83,7 +90,7 @@ int readFile(const char *file, char* buf, size_t *nread)
 	FILE *fp = fopen(file, "rb");
 	while ((tempLen = fread(tempBuf, 1, tempBufLen, fp)) > 0) {
 		if(*nread >= BUFSIZE){
-			printf("too big file size\n");
+			GLOG_INFO("too big file size\n");
 			ret = 0;
 			goto out;
 		}
@@ -112,16 +119,22 @@ enc (vector <struct readData*> &readList)
 	int size = readList.size();
 	for(int i = 0; i < size; i++)
     {
+		nout = 0;
 		memset(out, 0, (BUFSIZE * 5) / 3);
-		base64_encode(readList[i]->data, readList[i]->size, out, &nout, 0);
+		(*encodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
+
 		if (nout) {
 			fwrite(out, nout, 1, stdout);
-			printf("======================\n");
+			if(size > 1) GLOG_INFO("#########\n");
+		}else{
+			GLOG_INFO("encode failed\n");
 		}
 	}
 	steady_clock::time_point t2 = steady_clock::now();
 	duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-	printf("It took me %lf\n", time_span.count());
+	if(printTime){
+		GLOG_INFO("It took me %lf\n", time_span.count());
+	}
 	fclose(stdout);
 	return ret;
 }
@@ -130,25 +143,29 @@ static int
 dec (vector <struct readData*> &readList)
 {
 	int ret = 1;
-	//for (vector<std::string>::const_iterator iter = readList.cbegin(); iter != readList.cend(); iter++)
-    //{
-        //steady_clock::time_point t1 = steady_clock::now();
-		//ret = base64_decode(iter->c_str(), iter->size(), out, &nout, 0);
-		//steady_clock::time_point t2 = steady_clock::now();
-		//duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-		//printf("It took me %lf\n", time_span.count());
-		//if (!ret) {
-			//fprintf(stderr, "decoding error\n");
-			//ret = 0;
-			//goto out;
-		//}
-    //}
+	steady_clock::time_point t1 = steady_clock::now();
+	int size = readList.size();
+	for(int i = 0; i < size; i++)
+    {
+		memset(out, 0, (BUFSIZE * 5) / 3);
+		ret = (*decodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
+		if (!ret) {
+			fprintf(stderr, "decoding error\n");
+		}
+    }
+	steady_clock::time_point t2 = steady_clock::now();
+	duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+	if(printTime){
+		GLOG_INFO("It took me %lf\n", time_span.count());
+	}else{
+		if (nout) {
+			fwrite(out, nout, 1, stdout);
+		}else{
+			fprintf(stderr, "nout error\n");
+		}
+	}
 
-	////if (nout) {
-		////fwrite(out, nout, 1, stdout);
-	////}
-//out:
-	//fclose(stdout);
+	fclose(stdout);
 	return ret;
 }
 
@@ -156,7 +173,7 @@ int parseArgs(int argc, char *argv[])
 {
 	int opt=0;
 	int ret = 0;
-	while((opt=getopt_long(argc,argv,"dep:k:hv",long_option,NULL))!=-1){
+	while((opt=getopt_long(argc,argv,"dep:k:b:thv",long_option,NULL))!=-1){
 		switch(opt){
 			case 'd':
 				decode = 1;
@@ -173,6 +190,13 @@ int parseArgs(int argc, char *argv[])
 			case 'k':
 				keyword = optarg;
 				ret = 1;
+				break;
+			case 'b':
+				baseEngin = stoi(optarg, nullptr, 10);
+				ret = 1;
+				break;
+			case 't':
+				printTime = 1;
 				break;
 			case 'h':
 			case 'v':
@@ -210,6 +234,32 @@ main (int argc, char **argv)
 		readList.push_back(data);
 	}
 
+	switch(baseEngin){
+		case 1:{
+			if(decode){
+				decodeFun = &base64_decode;
+			}else{
+				encodeFun = &base64_encode;
+			}
+			break;
+		}
+		case 2:{
+			if(decode){
+				decodeFun = &base64_decode_find;
+			}else{
+				encodeFun = &base64_encode_find;
+			}
+			break;
+		}
+	}
+
 	// Invert return codes to create shell return code:
-	return (decode) ? !dec(readList) : !enc(readList);
+	int ret = (decode) ? !dec(readList) : !enc(readList);
+	for(int i = 0; i < size; i++)
+	{
+		free(readList[i]->data);
+		free(readList[i]);
+	}
+	readList.clear();
+	return ret;
 }
