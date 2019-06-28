@@ -3,7 +3,8 @@
 #include <string.h>	// strlen()
 #include <getopt.h>
 #include "../include/libbase64.h"
-
+#include <chrono>
+using namespace std::chrono;
 #define BUFSIZE 100 * 1024 * 1024
 
 static char buf[BUFSIZE];
@@ -46,12 +47,16 @@ enc (FILE *fp)
 	ret = readFile(fp, buf, &nread);
 	//printf("nout = %d, nread = %d, ret = %d\n", nout, nread, ret);
 	if(ret > 0){
+		steady_clock::time_point t1 = steady_clock::now();
 		base64_encode(buf, nread, out, &nout, 0);
+		steady_clock::time_point t2 = steady_clock::now();
+		duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+		printf("It took me %lf seconds\n", time_span.count());
 	}
 
-	if (nout) {
-		fwrite(out, nout, 1, stdout);
-	}
+	//if (nout) {
+		//fwrite(out, nout, 1, stdout);
+	//}
 	fclose(stdout);
 	return ret;
 }
@@ -62,17 +67,21 @@ dec (FILE *fp)
 	int ret = 1;
 	ret = readFile(fp, buf, &nread);
 	if(ret > 0){
-
-		if (!base64_decode(buf, nread, out, &nout, 0)) {
+		steady_clock::time_point t1 = steady_clock::now();
+		ret = base64_decode(buf, nread, out, &nout, 0);
+		steady_clock::time_point t2 = steady_clock::now();
+		duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+		printf("It took me %lf\n", time_span.count());
+		if (!ret) {
 			fprintf(stderr, "decoding error\n");
 			ret = 0;
 			goto out;
 		}
 	}
 
-	if (nout) {
-		fwrite(out, nout, 1, stdout);
-	}
+	//if (nout) {
+		//fwrite(out, nout, 1, stdout);
+	//}
 out:
 	fclose(stdout);
 	return ret;

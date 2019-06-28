@@ -62,7 +62,7 @@ endif
 all: bin/base64 lib/libbase64.o
 
 bin/base64: bin/base64.o lib/libbase64.o
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CXX) $(CFLAGS) -o $@ $^
 
 lib/libbase64.o: $(OBJS)
 	$(LD) -r -o $@ $^
