@@ -118,6 +118,7 @@ enc (vector <struct readData*> &readList)
 	int ret = 1;
 	double totalSpan = 0;
 	int size = readList.size();
+	int hasError = 0;
 	for(int i = 0; i < size; i++)
     {
 		nout = 0;
@@ -127,16 +128,27 @@ enc (vector <struct readData*> &readList)
 		(*encodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
 		steady_clock::time_point t2 = steady_clock::now();
 		totalSpan += duration_cast<duration<double>>(t2 - t1).count();
-		if (nout) {
-			fwrite(out, nout, 1, stdout);
-			if(size > 1) GLOG_INFO("#########\n");
-		}else{
-			GLOG_INFO("encode failed\n");
+		if(!nout)
+		{
+			hasError = 1;
+			printf("encode fail at: %s\n", readList[i]->sourceName);
 		}
 	}
 
-	if(printTime){
-		GLOG_INFO("It took me %lf\n", totalSpan);
+	if(hasError)
+	{
+		GLOG_INFO("encode failed\n");
+	}
+	else
+	{
+		if(printTime)
+		{
+			GLOG_INFO("It took me %lf\n", totalSpan);
+		}
+		else
+		{
+			fwrite(out, nout, 1, stdout);
+		}
 	}
 	fclose(stdout);
 	return ret;
@@ -146,6 +158,7 @@ static int
 dec (vector <struct readData*> &readList)
 {
 	int ret = 1;
+	int hasError = 0;
 	int size = readList.size();
 	double totalSpan = 0;
 	for(int i = 0; i < size; i++)
@@ -157,27 +170,26 @@ dec (vector <struct readData*> &readList)
 		ret = (*decodeFun)(readList[i]->data, readList[i]->size, out, &nout, 0);
 		steady_clock::time_point t2 = steady_clock::now();
 		totalSpan += duration_cast<duration<double>>(t2 - t1).count();
-
-		if(printTime) printf("decode OK: %s\n", readList[i]->sourceName);
+		if(!nout)
+		{
+			hasError = 1;
+			printf("decode fail at: %s\n", readList[i]->sourceName);
+		}
     }
 
-	if (!ret || !nout)
+	if (hasError)
 	{
 		fprintf(stderr, "decoding error\n");
 	}
-	if(printTime)
-	{
-		GLOG_INFO("It took me %lf\n", totalSpan);
-	}
 	else
 	{
-		if (nout)
+		if(printTime)
 		{
-			fwrite(out, nout, 1, stdout);
+			GLOG_INFO("It took me %lf\n", totalSpan);
 		}
 		else
 		{
-			fprintf(stderr, "nout error\n");
+			fwrite(out, nout, 1, stdout);
 		}
 	}
 
